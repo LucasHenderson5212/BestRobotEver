@@ -9,10 +9,14 @@
 #define LEFT_EYE PA1
 #define DETECT_THRESHOLD PA0
 #define STEERING_SERVO PA_7
+#define RIGHT_MOTOR PA_8
+#define LEFT_MOTOR PA_9
 
 #define STEERING_NEUTRAL 2000
 #define STEERING_MIN_INPUT 1700
 #define STEERING_MAX_INPUT 2600
+
+#define MOTOR_SPEED 450
 
 //PID constants Levi Rocks
 #define kp 50
@@ -51,41 +55,19 @@ void loop() {
   int lastState = steeringState;
   int leftOver;
 
-//If the last state was centered
-  if (lastState == 0){
-    //Turn right
-    if (rightOn && !leftOn){
-      steeringState = -1;
-    }
-    //Turn Left
-    if (!rightOn && leftOn){
-      steeringState = 1;
-      }
-  //If the last state was slightly to right
-  } else if (lastState == 1){
+
     if(rightOn && leftOn){
       steeringState = 0;
+    } else if (rightOn && !leftOn){
+      steeringState = -1;
+    } else if (!rightOn && leftOn){
+      steeringState = 1;
     } else if(!rightOn && !leftOn){
       steeringState = 5;
-    }
-  //If the last state was slightly to left
-  } else if (lastState == -1){
-    if(rightOn && leftOn){
-      steeringState = 0;
     } else if(!rightOn && !leftOn){
       steeringState = -5;
     }
-    //If the last state was far right
-  } else if (lastState == 5){
-    if(!rightOn && leftOn){
-      steeringState = 1;
-    }
-  //If the last state was far right
-  } else if (lastState == -5){
-    if(rightOn && !leftOn){
-      steeringState = -1;
-    }
-  }
+  
 
   int p = kp*steeringState;
   int d = kd*(steeringState-lastState);
@@ -105,18 +87,34 @@ void loop() {
     leftOver = currentServoPos + g - STEERING_MIN_INPUT;
     currentServoPos = STEERING_MIN_INPUT;
   } else {
+    leftOver = 0;
     currentServoPos = currentPIDNum + g;
   }
   currentPIDNum = currentPIDNum + g;
 
+  pwm_start(STEERING_SERVO, 50, currentServoPos, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
 
-  pwm_start(PA_7, 50, currentServoPos, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
   //Motor speed adjustment based on leftOver
+  /*
   if(leftOver > 0){
-    //pwm_start(PA_right_MOTOR, 50?, motorSpeed-leftOver*kdiff);
+    pwm_start(RIGHT_MOTOR, 1000, MOTOR_SPEED, TimerCompareFormat_t::RESOLUTION_16B_COMPARE_FORMAT);
+    if(leftOver*kdif > MOTOR_SPEED){
+      pwm_start(LEFT_MOTOR, 1000, 0, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+    } else {
+      pwm_start(LEFT_MOTOR, 1000, MOTOR_SPEED-leftOver*kdif, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+    }
   } else if (leftOver < 0){
-    //pwm_start(PA_LEFT_MOTOR, 50?, motorSpeed+leftOver*kdiff);
+    if(-leftOver*kdif > MOTOR_SPEED){
+      pwm_start(RIGHT_MOTOR, 1000, 0, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+    } else {
+      pwm_start(RIGHT_MOTOR, 1000, MOTOR_SPEED+leftOver*kdif, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+    }
+    pwm_start(LEFT_MOTOR, 1000, MOTOR_SPEED, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+  } else {
+    pwm_start(RIGHT_MOTOR, 1000, MOTOR_SPEED, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+    pwm_start(LEFT_MOTOR, 1000, MOTOR_SPEED, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
   }
+  */
 }
 
 
