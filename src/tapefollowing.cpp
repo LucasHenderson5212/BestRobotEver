@@ -10,20 +10,22 @@
 #define DETECT_THRESHOLD PA0
 #define STEERING_SERVO PA_7
 
-#define STEERING_NEUTRAL 1500
-#define STEERING_MIN_INPUT 1000
-#define STEERING_Max_INPUT 2000
+#define STEERING_NEUTRAL 2000
+#define STEERING_MIN_INPUT 1700
+#define STEERING_MAX_INPUT 2600
 
-//PID constants
-#define kp 1
-#define kd 1
-#define ki 0
+//PID constants Levi Rocks
+#define kp 50
+#define kd 50
+#define ki 10
+#define kdif 1
 
-#define maxi 10
+#define maxi 200
 
 int steeringState = 0;
 
-int currentServoPos;
+int currentServoPos = STEERING_NEUTRAL;
+int currentPIDNum = STEERING_NEUTRAL;
 
 Adafruit_SSD1306 display_handler(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
@@ -32,7 +34,6 @@ void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
 
 //Set Servo to neutral position
-  currentServoPos = STEERING_NEUTRAL;
   pwm_start(STEERING_SERVO, 50, currentServoPos, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
 
   //Tape Following
@@ -42,12 +43,13 @@ void setup() {
 }
 
 void loop() {
+  //Digital System
   int threshold = analogRead(DETECT_THRESHOLD);
   bool rightOn = analogRead(RIGHT_EYE) > threshold;
   bool leftOn = analogRead(LEFT_EYE) > threshold;
-  int error = 0;
 
   int lastState = steeringState;
+  int leftOver;
 
 //If the last state was centered
   if (lastState == 0){
@@ -87,14 +89,34 @@ void loop() {
 
   int p = kp*steeringState;
   int d = kd*(steeringState-lastState);
-  int i = ki*error + i;
+  int i = ki*steeringState + i;
+
   if (i > maxi){
     i = maxi;
   } else if (i < -maxi){
     i = -maxi;
   }
+
   int g = p + d + i;
-  pwm_start(PA_7, 50, STEERING_NEUTRAL+g, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+  if (currentPIDNum + g > STEERING_MAX_INPUT) {
+    leftOver = currentPIDNum + g - STEERING_MAX_INPUT;
+    currentServoPos = STEERING_MAX_INPUT;
+  } else if (currentServoPos + g < STEERING_MIN_INPUT) {
+    leftOver = currentServoPos + g - STEERING_MIN_INPUT;
+    currentServoPos = STEERING_MIN_INPUT;
+  } else {
+    currentServoPos = currentPIDNum + g;
+  }
+  currentPIDNum = currentPIDNum + g;
+
+
+  pwm_start(PA_7, 50, currentServoPos, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+  //Motor speed adjustment based on leftOver
+  if(leftOver > 0){
+    //pwm_start(PA_right_MOTOR, 50?, motorSpeed-leftOver*kdiff);
+  } else if (leftOver < 0){
+    //pwm_start(PA_LEFT_MOTOR, 50?, motorSpeed+leftOver*kdiff);
+  }
 }
 
 
