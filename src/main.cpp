@@ -1,5 +1,6 @@
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
+#include <math.h>
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
@@ -17,24 +18,27 @@
 #define STEERING_MIN_INPUT 1080
 #define STEERING_MAX_INPUT 2000
 
-#define PID_MIN STEERING_MIN_INPUT-2*MOTOR_SPEED
-#define PID_MAX STEERING_MAX_INPUT+2*MOTOR_SPEED
+#define PID_MIN STEERING_MIN_INPUT//-2*MOTOR_SPEED
+#define PID_MAX STEERING_MAX_INPUT//+2*MOTOR_SPEED
 
-#define MOTOR_SPEED 400
-#define THRESHOLD 300
+#define MOTOR_FREQUENCY 100
+#define MOTOR_SPEED 4000
+#define THRESHOLD 140
 
-#define STATE_1 2
-#define STATE_2 4
+#define STATE_1 1
+#define STATE_2 2
 
 //PID constants
-#define kp 10
-#define kd 20
-#define ki 5
-#define kdif 1
+#define kp 20
+#define kd 200
+#define kdout 0
+#define ki 100
+#define kdif 0.05
 
-#define maxi 50
+#define maxi 0
 
 int steeringState = 0;
+int i = 0;
 
 int currentServoPos = STEERING_NEUTRAL;
 int currentPIDNum = STEERING_NEUTRAL;
@@ -61,9 +65,6 @@ void setup() {
   pinMode(LEFT_EYE, INPUT);
   //pinMode(DETECT_THRESHOLD, INPUT);
 
-  //Motors
-  pwm_start(RIGHT_MOTOR, 1000, MOTOR_SPEED, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
-  pwm_start(LEFT_MOTOR, 1000, MOTOR_SPEED, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
 
   // //for testing
   // display_handler.begin(SSD1306_SWITCHCAPVCC, 0x3C);
@@ -74,15 +75,15 @@ void setup() {
   // display_handler.setCursor(0,0);
   // display_handler.println("Hi Rudy!");
   // display_handler.display();
-  
-  delay(10000);
+
+  delay(100);
 
  lastTime = getCurrentMillis();
 }
 
 void loop() {
-
-  if((getCurrentMillis() - lastTime) > 25){
+  if((getCurrentMillis() - lastTime) > 10){
+    
     lastTime = getCurrentMillis();
 
     //int threshold = analogRead(DETECT_THRESHOLD);
@@ -128,9 +129,14 @@ void loop() {
     // display_handler.display();
   
 
-    int p = kp*steeringState;
-    int d = kd*(steeringState-lastState);
-    int i = ki*steeringState + i;
+    int p = (int)(kp*steeringState);
+    int d;
+    if(abs(lastState) > abs(steeringState)){
+      d = (int)(kd*(steeringState-lastState));
+    } else {
+      d = (int)(kdout*(steeringState-lastState));
+    }
+    i = (int)(ki*steeringState) + i;
 
     if (i > maxi){
       i = maxi;
@@ -147,46 +153,61 @@ void loop() {
       currentPIDNum = PID_MIN;
     }
 
-    if (currentPIDNum > STEERING_MAX_INPUT) {
-      leftOver = currentPIDNum - STEERING_MAX_INPUT;
-      currentServoPos = STEERING_MAX_INPUT;
-    } else if (currentPIDNum < STEERING_MIN_INPUT) {
-      leftOver = currentPIDNum - STEERING_MIN_INPUT;
-      currentServoPos = STEERING_MIN_INPUT;
-    } else {
+    // if (currentPIDNum > STEERING_MAX_INPUT) {
+    //   leftOver = currentPIDNum - STEERING_MAX_INPUT;
+    //   currentServoPos = STEERING_MAX_INPUT;
+    // } else if (currentPIDNum < STEERING_MIN_INPUT) {
+    //   leftOver = currentPIDNum - STEERING_MIN_INPUT;
+    //   currentServoPos = STEERING_MIN_INPUT;
+    // } else {
       leftOver = 0;
       currentServoPos = currentPIDNum;
-    }
+    //}
     
 
     pwm_start(STEERING_SERVO, 50, currentServoPos, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
 
+    if(getCurrentMillis() > 4000){
 
-    if(leftOver > 0){
-      if(leftOver*kdif > MOTOR_SPEED){
-        pwm_start(LEFT_MOTOR, 1000, 0, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
-        pwm_start(LEFT_MOTOR_2, 1000, leftOver*kdif-MOTOR_SPEED, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+      if(leftOver > 0){
+        if(leftOver*kdif > MOTOR_SPEED){
+          pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+          pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, (int)(leftOver*kdif-MOTOR_SPEED), TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+        } else {
+          pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+          pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, (int)(MOTOR_SPEED-leftOver*kdif), TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+        }
+        pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, MOTOR_SPEED+400, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+      } else if (leftOver < 0){
+        if(-leftOver*kdif > MOTOR_SPEED){
+          pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+          pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, (int)(-leftOver*kdif), TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+        } else {
+          pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+          pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, (int)(MOTOR_SPEED+leftOver*kdif), TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+        }
+        pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, MOTOR_SPEED+400, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
       } else {
-        pwm_start(LEFT_MOTOR_2, 1000, 0, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
-        pwm_start(LEFT_MOTOR, 1000, MOTOR_SPEED-leftOver*kdif, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+        pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+        pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+        pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, MOTOR_SPEED, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+        pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, MOTOR_SPEED, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
       }
-      pwm_start(RIGHT_MOTOR, 1000, MOTOR_SPEED+400, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
-    } else if (leftOver < 0){
-      if(-leftOver*kdif > MOTOR_SPEED){
-        pwm_start(RIGHT_MOTOR, 1000, 0, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
-        pwm_start(RIGHT_MOTOR_2, 1000, -leftOver*kdif, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
-      } else {
-        pwm_start(RIGHT_MOTOR_2, 1000, 0, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
-        pwm_start(RIGHT_MOTOR, 1000, MOTOR_SPEED+leftOver*kdif, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
-      }
-      pwm_start(LEFT_MOTOR, 1000, MOTOR_SPEED+400, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
-    } else {
-      pwm_start(RIGHT_MOTOR_2, 1000, 0, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
-      pwm_start(LEFT_MOTOR_2, 1000, 0, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
-      pwm_start(RIGHT_MOTOR, 1000, MOTOR_SPEED, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
-      pwm_start(LEFT_MOTOR, 1000, MOTOR_SPEED, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
     }
-  }
+  //}
+  
+  //else {
+  //   pwm_start(RIGHT_MOTOR_2, 1000, 0, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+  //   pwm_start(LEFT_MOTOR_2, 1000, 0, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+  //   pwm_start(RIGHT_MOTOR, 1000, MOTOR_SPEED, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+  //   pwm_start(LEFT_MOTOR, 1000, MOTOR_SPEED, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+  //   delay(5000);
+  //   pwm_start(RIGHT_MOTOR, 1000, 0, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+  //   pwm_start(LEFT_MOTOR, 1000, 0, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+  //   pwm_start(RIGHT_MOTOR_2, 1000, MOTOR_SPEED, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+  //   pwm_start(LEFT_MOTOR_2, 1000, MOTOR_SPEED, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+  //   delay(5000);
+   }
   
 }
 
