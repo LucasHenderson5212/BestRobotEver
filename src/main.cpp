@@ -64,18 +64,18 @@
 #define STATE_4 7
 
 //PID constants
-#define kp 125
+#define kp 105
 #define kd 160
 #define kdout 20
-#define ki 3
-#define kdif 2.2
+#define ki 1
+#define kdif 5
 
 #define kWheelSpeedUp (4000-MOTOR_SPEED)/(MAX_LEFTOVER*kdif)*0//.3
 //leftOver*kdif*0.x < 4000 - MOTOR_SPEED
 
 #define dDuration 12
 
-#define maxi 400
+#define maxi 50
 
 int steeringState = 0;
 int i = 0;
@@ -143,7 +143,7 @@ void setup() {
   pwm_start(LEFT_DOOR, 50, LEFT_DOOR_OPEN, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
 
   //delay(200);
-  //digitalWrite(BOX_MOTOR, HIGH);
+  digitalWrite(BOX_MOTOR, HIGH);
 
  
   //Set Servo to neutral position
@@ -303,9 +303,6 @@ void follow_tape(){
     }
     lastD = d;
     i = (int)(ki*steeringState) + i;
-    if(abs(steeringState) < STATE_4){
-      i = 0;
-    }
 
     //Keep i within max
     if (i > maxi){
