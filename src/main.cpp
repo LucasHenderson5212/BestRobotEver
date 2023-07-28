@@ -31,6 +31,9 @@
 #define MAG_OUT_SENSOR PA12
 #define MAG_OUT_SENSOR_2 PA11
 
+//#define MAG_OUT_SENSOR PB_9
+//#define MAG_OUT_SENSOR_2 PB_10
+
 #define LEFT_DOOR PA_8
 #define RIGHT_DOOR PA_10
 
@@ -47,16 +50,15 @@
 #define STEERING_MIN_INPUT 700
 #define STEERING_MAX_INPUT 1800
 
-#define MAX_LEFTOVER (4095+MOTOR_SPEED-2*MOTOR_DEADZONE)/kdif
+#define MAX_LEFTOVER (4095+MOTOR_SPEED)/kdif
 
 #define PID_MIN STEERING_MIN_INPUT-MAX_LEFTOVER
 #define PID_MAX STEERING_MAX_INPUT+MAX_LEFTOVER
 
 #define MOTOR_FREQUENCY 100
-#define MOTOR_SPEED 1300
-#define MOTOR_DEADZONE 475
+#define MOTOR_SPEED 1200
 
-#define THRESHOLD 250
+#define THRESHOLD 220
 
 #define STATE_1 1
 #define STATE_2 2
@@ -68,10 +70,10 @@
 #define kd 160
 #define kdout 20
 #define ki 1
-#define kdif 2
+#define kdif 6
 
-//#define kWheelSpeedUp (4000-MOTOR_SPEED)/(MAX_LEFTOVER*kdif)*0.3//.3
-#define kWheelSpeedUp 0.3
+#define kWheelSpeedUp (4000-MOTOR_SPEED)/(MAX_LEFTOVER*kdif)*0//.3
+//leftOver*kdif*0.x < 4000 - MOTOR_SPEED
 
 #define dDuration 12
 
@@ -115,7 +117,7 @@ void setup() {
     pinMode(LEFT_MOTOR, OUTPUT);
     pinMode(LEFT_MOTOR_2, OUTPUT);
   }
-  
+
   //pinMode(RIGHT_DOOR, OUTPUT);
   //pinMode(LEFT_DOOR, OUTPUT);
 
@@ -194,6 +196,13 @@ void loop() {
       shouldStart = false;
       digitalWrite(BOX_MOTOR, HIGH);
     }
+    //Only like this if no exit sensors
+    // if(doorsClosed && (getCurrentMillis()-doorCloseTime)>2500){
+    //   magnet_out_interrupt();
+    // } else if (shouldStart){
+    //   shouldStart = false;
+    //   digitalWrite(BOX_MOTOR, HIGH);
+    // }
 
     //Increase speedMultiplier towards 1 (in case it was decreased by collision)
     if (getCurrentMillis()-collisionTime > 500 && speedMultiplier < 1){
@@ -227,6 +236,7 @@ void follow_tape(){
     bool leftOn = analogRead(LEFT_EYE) > THRESHOLD;
     bool leftOutOn = analogRead(LEFT_EYE_OUT) > THRESHOLD;
 
+    int leftOver;
     int lastState = steeringState;
 
     // FOR 4 REFLECTENCE SENSORS, find the position state
@@ -280,11 +290,11 @@ void follow_tape(){
     // calculate PID change
     int p = (int)(kp*steeringState);
     int d = (int)(kd*(steeringState-lastState));
-    //d only kicks in if approaching the tape
+    //d only uses kd if approaching the tape, otherwise kdout
     if (abs(steeringState) > abs(lastState)){
       d = (int)(kdout*(steeringState-lastState));
     }
-    //d decays after 12 loops
+    //d decays after dDuration (12) loops
     if (d == 0 && dCount > 0){
       d = lastD;
       dCount--;
@@ -312,59 +322,73 @@ void follow_tape(){
     int g = p + d + i;
 
     //corrects for non-linearity in servo
-    /*
     if (g < 0 && g > -(STEERING_MAX_INPUT-STEERING_NEUTRAL)){
       g = g*(STEERING_NEUTRAL-STEERING_MIN_INPUT)/(STEERING_MAX_INPUT-STEERING_NEUTRAL);
     } else if (g <= -(STEERING_MAX_INPUT-STEERING_NEUTRAL)){
       g = g+(STEERING_MAX_INPUT-STEERING_NEUTRAL)-(STEERING_NEUTRAL-STEERING_MIN_INPUT);
-    }*/
+    }
     
     //Keep numbers within min/max
-    currentServoPos = STEERING_NEUTRAL + g;
+    currentPIDNum = STEERING_NEUTRAL + g;
+    if(currentPIDNum > PID_MAX) {
+      currentPIDNum = PID_MAX;
+    } else if (currentPIDNum < PID_MIN){
+      currentPIDNum = PID_MIN;
+    }
 
-    //Linearize Servo, and keep it within maximum values
-    if (g < 0){
-      currentServoPos = STEERING_NEUTRAL+g*(STEERING_NEUTRAL-STEERING_MIN_INPUT)/(STEERING_MAX_INPUT-STEERING_NEUTRAL);
-    }
-    if (currentServoPos > STEERING_MAX_INPUT) {
+    //Calculate amount of differential steering to add on top of steering, and set steering
+    if (currentPIDNum > STEERING_MAX_INPUT) {
+      leftOver = currentPIDNum - STEERING_MAX_INPUT;
       currentServoPos = STEERING_MAX_INPUT;
-    } else if (currentServoPos < STEERING_MIN_INPUT) {
+    } else if (currentPIDNum < STEERING_MIN_INPUT) {
+      leftOver = currentPIDNum - STEERING_MIN_INPUT;
       currentServoPos = STEERING_MIN_INPUT;
+    } else {
+      leftOver = 0;
+      currentServoPos = currentPIDNum;
     }
-    
     
     //Set new servo position
     pwm_start(STEERING_SERVO, 50, currentServoPos, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
 
-    //keep differential within maximum 
-    if (kdif*g-MOTOR_SPEED+2*MOTOR_DEADZONE > 4095) {
-      g = (4095+MOTOR_SPEED-2*MOTOR_DEADZONE)/kdif;
-    } else if (kdif*g+MOTOR_SPEED-2*MOTOR_DEADZONE < -4095) {
-      g = -(4095+MOTOR_SPEED-2*MOTOR_DEADZONE)/kdif;
+    // if(abs(steeringState) < STATE_4){
+    //   leftOver = 0;
+    // }
+
+    //keep differential within maximum (shouldn't happen but safety) 
+    if (kdif*leftOver-MOTOR_SPEED > 4095) {
+      leftOver = (4095+MOTOR_SPEED)/kdif;
+    } else if (kdif*leftOver+MOTOR_SPEED < -4095) {
+      leftOver = -(4095+MOTOR_SPEED)/kdif;
     }
     
     //Set Motors
     if(getCurrentMillis() > 2000 && !displayOn){
-      if(g > 0){
-        if(g*kdif > MOTOR_SPEED-MOTOR_DEADZONE){
+      if(leftOver > 0){
+        if(leftOver*kdif > MOTOR_SPEED){
           pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-          pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, (int)((g*kdif-MOTOR_SPEED+2*MOTOR_DEADZONE)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+          pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, (int)((leftOver*kdif-MOTOR_SPEED)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
         } else {
           pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-          pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, (int)((MOTOR_SPEED-g*kdif)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+          pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, (int)((MOTOR_SPEED-leftOver*kdif)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
         }
         pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-        pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, (int)((MOTOR_SPEED+g*kdif*kWheelSpeedUp)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-      } else {
-        if(-g*kdif > MOTOR_SPEED-MOTOR_DEADZONE){
+        pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, (int)(MOTOR_SPEED+leftOver*kdif*kWheelSpeedUp*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+      } else if (leftOver < 0){
+        if(-leftOver*kdif > MOTOR_SPEED){
           pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-          pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, (int)((-g*kdif-MOTOR_SPEED+2*MOTOR_DEADZONE)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+          pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, (int)((-leftOver*kdif-MOTOR_SPEED)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
         } else {
           pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-          pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, (int)((MOTOR_SPEED+g*kdif)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+          pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, (int)((MOTOR_SPEED+leftOver*kdif)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
         }
         pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-        pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, (int)((MOTOR_SPEED-g*kdif*kWheelSpeedUp)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+        pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, (int)(MOTOR_SPEED-leftOver*kdif*kWheelSpeedUp*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+      } else {
+        pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+        pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+        pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, (int)(MOTOR_SPEED*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+        pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, (int)(MOTOR_SPEED*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
       }
     }
 }
