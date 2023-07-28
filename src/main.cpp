@@ -28,8 +28,8 @@
 #define MAG_SENSOR_3 PB3
 #define MAG_SENSOR_4 PA15
 
-//#define MAG_OUT_SENSOR PB_9
-//#define MAG_OUT_SENSOR_2 PB_10
+#define MAG_OUT_SENSOR PA12
+#define MAG_OUT_SENSOR_2 PA11
 
 #define LEFT_DOOR PA_8
 #define RIGHT_DOOR PA_10
@@ -56,7 +56,7 @@
 #define MOTOR_SPEED 1300
 #define MOTOR_DEADZONE 475
 
-#define THRESHOLD 220
+#define THRESHOLD 250
 
 #define STATE_1 1
 #define STATE_2 2
@@ -68,10 +68,10 @@
 #define kd 160
 #define kdout 20
 #define ki 1
-#define kdif 5
+#define kdif 2
 
-#define kWheelSpeedUp (4000-MOTOR_SPEED)/(MAX_LEFTOVER*kdif)*0//.3
-//leftOver*kdif*0.x < 4000 - MOTOR_SPEED
+//#define kWheelSpeedUp (4000-MOTOR_SPEED)/(MAX_LEFTOVER*kdif)*0.3//.3
+#define kWheelSpeedUp 0.3
 
 #define dDuration 12
 
@@ -130,8 +130,8 @@ void setup() {
   pinMode(MAG_SENSOR_2, INPUT);
   pinMode(MAG_SENSOR_3, INPUT);
   pinMode(MAG_SENSOR_4, INPUT);
-  // pinMode(MAG_OUT_SENSOR, INPUT);
-  // pinMode(MAG_OUT_SENSOR_2, INPUT);
+  pinMode(MAG_OUT_SENSOR, INPUT);
+  pinMode(MAG_OUT_SENSOR_2, INPUT);
 
   //Collision Detection
   pinMode(LEFT_COLLISION, INPUT);
@@ -181,25 +181,19 @@ void loop() {
     int mag4 = digitalRead(MAG_SENSOR_4);
     if(!doorsClosed && (!mag1 || !mag2 || !mag3 || !mag4)){
       magnet_interrupt();
-      // display_handler.clearDisplay();
-      // display_handler.setTextSize(1);
-      // display_handler.setTextColor(SSD1306_WHITE);
-      // display_handler.setCursor(0,0);
-      // //char msg[100];
-      // char msg2[100];
-      // //sprintf(msg, "Steering State: %d", steeringState);
-      // sprintf(msg2, "%d %d %d %d", digitalRead(MAG_SENSOR), digitalRead(MAG_SENSOR_2), digitalRead(MAG_SENSOR_3), digitalRead(MAG_SENSOR_4));
-      // //display_handler.println(msg);
-      // display_handler.println(msg2);
-      // display_handler.display();
     }
-    //Only like this if no exit sensors
-    // if(doorsClosed && (getCurrentMillis()-doorCloseTime)>2500){
-    //   magnet_out_interrupt();
-    // } else if (shouldStart){
-    //   shouldStart = false;
-    //   digitalWrite(BOX_MOTOR, HIGH);
-    // }
+    int mago = digitalRead(MAG_OUT_SENSOR);
+    int mago2 = digitalRead(MAG_OUT_SENSOR_2);
+    if(doorsClosed && (!mago || !mago2)){
+      magnet_out_interrupt();
+    }
+    //Only like this if no exit sensors after long time
+    if(doorsClosed && (getCurrentMillis()-doorCloseTime)>5000){
+      magnet_out_interrupt();
+    } else if (shouldStart){
+      shouldStart = false;
+      digitalWrite(BOX_MOTOR, HIGH);
+    }
 
     //Increase speedMultiplier towards 1 (in case it was decreased by collision)
     if (getCurrentMillis()-collisionTime > 500 && speedMultiplier < 1){
@@ -233,7 +227,6 @@ void follow_tape(){
     bool leftOn = analogRead(LEFT_EYE) > THRESHOLD;
     bool leftOutOn = analogRead(LEFT_EYE_OUT) > THRESHOLD;
 
-    int leftOver;
     int lastState = steeringState;
 
     // FOR 4 REFLECTENCE SENSORS, find the position state
@@ -319,73 +312,59 @@ void follow_tape(){
     int g = p + d + i;
 
     //corrects for non-linearity in servo
+    /*
     if (g < 0 && g > -(STEERING_MAX_INPUT-STEERING_NEUTRAL)){
       g = g*(STEERING_NEUTRAL-STEERING_MIN_INPUT)/(STEERING_MAX_INPUT-STEERING_NEUTRAL);
     } else if (g <= -(STEERING_MAX_INPUT-STEERING_NEUTRAL)){
       g = g+(STEERING_MAX_INPUT-STEERING_NEUTRAL)-(STEERING_NEUTRAL-STEERING_MIN_INPUT);
-    }
+    }*/
     
     //Keep numbers within min/max
-    currentPIDNum = STEERING_NEUTRAL + g;
-    if(currentPIDNum > PID_MAX) {
-      currentPIDNum = PID_MAX;
-    } else if (currentPIDNum < PID_MIN){
-      currentPIDNum = PID_MIN;
-    }
+    currentServoPos = STEERING_NEUTRAL + g;
 
-    //Calculate amount of differential steering to add on top of steering, and set steering
-    if (currentPIDNum > STEERING_MAX_INPUT) {
-      leftOver = currentPIDNum - STEERING_MAX_INPUT;
-      currentServoPos = STEERING_MAX_INPUT;
-    } else if (currentPIDNum < STEERING_MIN_INPUT) {
-      leftOver = currentPIDNum - STEERING_MIN_INPUT;
-      currentServoPos = STEERING_MIN_INPUT;
-    } else {
-      leftOver = 0;
-      currentServoPos = currentPIDNum;
+    //Linearize Servo, and keep it within maximum values
+    if (g < 0){
+      currentServoPos = STEERING_NEUTRAL+g*(STEERING_NEUTRAL-STEERING_MIN_INPUT)/(STEERING_MAX_INPUT-STEERING_NEUTRAL);
     }
+    if (currentServoPos > STEERING_MAX_INPUT) {
+      currentServoPos = STEERING_MAX_INPUT;
+    } else if (currentServoPos < STEERING_MIN_INPUT) {
+      currentServoPos = STEERING_MIN_INPUT;
+    }
+    
     
     //Set new servo position
     pwm_start(STEERING_SERVO, 50, currentServoPos, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
 
-    // if(abs(steeringState) < STATE_4){
-    //   leftOver = 0;
-    // }
-
-    //keep differential within maximum (shouldn't happen but safety) 
-    if (kdif*leftOver-MOTOR_SPEED+2*MOTOR_DEADZONE > 4095) {
-      leftOver = (4095+MOTOR_SPEED)/kdif;
-    } else if (kdif*leftOver+MOTOR_SPEED-2*MOTOR_DEADZONE < -4095) {
-      leftOver = -(4095+MOTOR_SPEED)/kdif;
+    //keep differential within maximum 
+    if (kdif*g-MOTOR_SPEED+2*MOTOR_DEADZONE > 4095) {
+      g = (4095+MOTOR_SPEED-2*MOTOR_DEADZONE)/kdif;
+    } else if (kdif*g+MOTOR_SPEED-2*MOTOR_DEADZONE < -4095) {
+      g = -(4095+MOTOR_SPEED-2*MOTOR_DEADZONE)/kdif;
     }
     
     //Set Motors
     if(getCurrentMillis() > 2000 && !displayOn){
-      if(leftOver > 0){
-        if(leftOver*kdif > MOTOR_SPEED-MOTOR_DEADZONE){
+      if(g > 0){
+        if(g*kdif > MOTOR_SPEED-MOTOR_DEADZONE){
           pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-          pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, (int)((leftOver*kdif-MOTOR_SPEED+2*MOTOR_DEADZONE)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+          pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, (int)((g*kdif-MOTOR_SPEED+2*MOTOR_DEADZONE)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
         } else {
           pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-          pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, (int)((MOTOR_SPEED-leftOver*kdif)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+          pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, (int)((MOTOR_SPEED-g*kdif)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
         }
         pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-        pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, (int)(MOTOR_SPEED+leftOver*kdif*kWheelSpeedUp*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-      } else if (leftOver < 0){
-        if(-leftOver*kdif > MOTOR_SPEED-MOTOR_DEADZONE){
+        pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, (int)((MOTOR_SPEED+g*kdif*kWheelSpeedUp)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+      } else {
+        if(-g*kdif > MOTOR_SPEED-MOTOR_DEADZONE){
           pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-          pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, (int)((-leftOver*kdif-MOTOR_SPEED+2*MOTOR_DEADZONE)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+          pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, (int)((-g*kdif-MOTOR_SPEED+2*MOTOR_DEADZONE)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
         } else {
           pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-          pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, (int)((MOTOR_SPEED+leftOver*kdif)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+          pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, (int)((MOTOR_SPEED+g*kdif)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
         }
         pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-        pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, (int)(MOTOR_SPEED-leftOver*kdif*kWheelSpeedUp*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-      } else {
-        pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-        pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-        pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, (int)(MOTOR_SPEED*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-        pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, (int)(MOTOR_SPEED*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+        pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, (int)((MOTOR_SPEED-g*kdif*kWheelSpeedUp)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
       }
     }
 }
