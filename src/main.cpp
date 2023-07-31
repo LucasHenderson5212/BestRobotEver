@@ -4,7 +4,7 @@
 
 #define displayOn false
 #define HARD_CODE_RIGHT false
-#define HARD_CODE_LEFT true
+#define HARD_CODE_LEFT false
 
 #define TAPE_FOLLOW_STATE 1
 #define COLLISION_STATE 2
@@ -63,7 +63,7 @@
 #define MOTOR_FREQUENCY 100
 #define MOTOR_SPEED 1200
 
-#define THRESHOLD 300
+#define THRESHOLD 270
 
 #define STATE_1 1
 #define STATE_2 2
@@ -77,7 +77,7 @@
 #define ki 1
 #define kdif 6
 
-#define kWheelSpeedUp (4000-MOTOR_SPEED)/(MAX_LEFTOVER*kdif)*0.4
+#define kWheelSpeedUp (4000-MOTOR_SPEED)/(MAX_LEFTOVER*kdif)*0.2
 //leftOver*kdif*0.x < 4000 - MOTOR_SPEED
 
 #define dDuration 12
@@ -153,7 +153,7 @@ void setup() {
   pwm_start(LEFT_DOOR, 50, LEFT_DOOR_OPEN, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
 
   //delay(200);
-  digitalWrite(BOX_MOTOR, HIGH);
+  //digitalWrite(BOX_MOTOR, HIGH);
 
  
   //Set Servo to neutral position
@@ -277,8 +277,9 @@ void follow_tape(){
       offTapeCount = 0;
     }
 
-    // Once robot is back on tape, set motors back to normal immediately (to prevent overshooting?)
+    // Once robot is back on tape, set motors, i back to normal immediately (to prevent overshooting?)
     if(abs(steeringState) < STATE_4){
+      //i = 0;
       if (currentPIDNum > STEERING_MAX_INPUT) {
         currentPIDNum = STEERING_MAX_INPUT;
       } else if (currentPIDNum < STEERING_MIN_INPUT) {
@@ -330,11 +331,6 @@ void follow_tape(){
     } else if (i < -maxi){
       i = -maxi;
     }
-
-    // if(abs(lastState) < abs(steeringState)){
-    //   //immediately reduce i to 0
-    //   i = 0;
-    // }
 
     int g = p + d + i;
 
@@ -457,34 +453,48 @@ void magnet_out_interrupt(){
 }
 
 void rightTurn(){
-  pwm_start(STEERING_SERVO, 50, STEERING_MIN_INPUT, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
   pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
   pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 1000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 1000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  delay(50);
+  pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 2200, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 2200, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  delay(300);
+  pwm_start(STEERING_SERVO, 50, STEERING_MIN_INPUT, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
   pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 2000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
   pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 500, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
   delay(500);
-  pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-  pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  pwm_start(STEERING_SERVO, 50, STEERING_NEUTRAL+50, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+  pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 2000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 2000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  delay(600);
   pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-  pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);  
 
-  pwm_start(STEERING_SERVO, 50, STEERING_NEUTRAL, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
   delay(10000000);
 }
 
 void leftTurn(){
-  pwm_start(STEERING_SERVO, 50, STEERING_MAX_INPUT, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
   pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
   pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 1000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 1000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  delay(50);
+  pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 2200, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 2200, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  delay(300);
+  pwm_start(STEERING_SERVO, 50, STEERING_MAX_INPUT, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
   pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 2000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
   pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 500, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-  delay(500);
-  pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-  pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-  pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-  pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-
+  delay(650);
   pwm_start(STEERING_SERVO, 50, STEERING_NEUTRAL, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+  pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 2000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 2000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  delay(450);
+  pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);  
+
   delay(10000000);
 }
 
