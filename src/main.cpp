@@ -18,8 +18,8 @@
 #define RIGHT_EYE_OUT PA2
 #define LEFT_EYE_OUT PA3
 
-#define LEFT_SIDE_EYE PA5
-#define RIGHT_SIDE_EYE PA6
+#define LEFT_SIDE_EYE PA6
+#define RIGHT_SIDE_EYE PA5
 
 #define STEERING_SERVO PA_0
 #define LEFT_MOTOR PB_7
@@ -36,24 +36,25 @@
 #define MAG_OUT_SENSOR PA12
 #define MAG_OUT_SENSOR_2 PA11
 
-//#define MAG_OUT_SENSOR PB_9
-//#define MAG_OUT_SENSOR_2 PB_10
+#define BOX_COUNTER PB1
+#define MAX_BOXES 3
 
 #define LEFT_DOOR PA_8
 #define RIGHT_DOOR PA_10
 
-#define LEFT_DOOR_CLOSE 1600
+#define LEFT_DOOR_CLOSE 1575
 #define LEFT_DOOR_OPEN 1000
-#define RIGHT_DOOR_CLOSE 1200
-#define RIGHT_DOOR_OPEN 1600
+#define RIGHT_DOOR_CLOSE 1150
+#define RIGHT_DOOR_OPEN 1725
 
-#define LEFT_COLLISION PB13
-#define RIGHT_COLLISION PB14
-#define MIDDLE_COLLISION PB15
+#define LEFT_COLLISION PB12
+#define MIDDLE_LEFT_COLLISION PB13
+#define MIDDLE_RIGHT_COLLISION PB14
+#define RIGHT_COLLISION PB15
 
-#define STEERING_NEUTRAL 1300
-#define STEERING_MIN_INPUT 800
-#define STEERING_MAX_INPUT 1800
+#define STEERING_NEUTRAL 1450
+#define STEERING_MIN_INPUT 1100
+#define STEERING_MAX_INPUT 2000
 
 #define MAX_LEFTOVER (4095+MOTOR_SPEED)/kdif
 
@@ -61,9 +62,9 @@
 #define PID_MAX STEERING_MAX_INPUT+MAX_LEFTOVER
 
 #define MOTOR_FREQUENCY 100
-#define MOTOR_SPEED 1200
+#define MOTOR_SPEED 1300
 
-#define THRESHOLD 270
+#define THRESHOLD 350
 
 #define STATE_1 1
 #define STATE_2 2
@@ -90,18 +91,24 @@ int i = 0;
 int dCount = 0;
 int lastD = 0;
 
-int speedMultiplier = 1;
+int boxCount = 0;
+int lastBoxState = 0;
+
+double speedMultiplier = 1;
 int collisionTime = 0;
+int lastCollisionState = 0;
 
 int currentServoPos = STEERING_NEUTRAL;
 int currentPIDNum = STEERING_NEUTRAL;
 
 int lastTime;
-int offTapeCount;
+int offTapeCount = 0;
 
 bool doorsClosed = false;
 int doorCloseTime = 0;
 bool shouldStart = false;
+int stopTime = 0;
+bool shouldStop = false;
 
 void magnet_interrupt(void);
 void magnet_out_interrupt(void);
@@ -126,14 +133,16 @@ void setup() {
     pinMode(LEFT_MOTOR_2, OUTPUT);
   }
 
-  //pinMode(RIGHT_DOOR, OUTPUT);
-  //pinMode(LEFT_DOOR, OUTPUT);
+  pinMode(RIGHT_DOOR, OUTPUT);
+  pinMode(LEFT_DOOR, OUTPUT);
 
   // //Tape Following
   pinMode(RIGHT_EYE, INPUT);
   pinMode(LEFT_EYE, INPUT);
   pinMode(RIGHT_EYE_OUT, INPUT);
   pinMode(LEFT_EYE_OUT, INPUT);
+  pinMode(RIGHT_SIDE_EYE, INPUT);
+  pinMode(LEFT_SIDE_EYE, INPUT);
 
   //Bomb Detection
   pinMode(MAG_SENSOR, INPUT);
@@ -143,17 +152,20 @@ void setup() {
   pinMode(MAG_OUT_SENSOR, INPUT);
   pinMode(MAG_OUT_SENSOR_2, INPUT);
 
-  //Collision Detection
+  // //Collision Detection
   pinMode(LEFT_COLLISION, INPUT);
+  pinMode(MIDDLE_LEFT_COLLISION, INPUT);
+  pinMode(MIDDLE_RIGHT_COLLISION, INPUT);
   pinMode(RIGHT_COLLISION, INPUT);
-  pinMode(MIDDLE_COLLISION, INPUT);
 
+  //Box Counter
+  pinMode(BOX_COUNTER, INPUT_PULLUP);
   //Opens doors
   pwm_start(RIGHT_DOOR, 50, RIGHT_DOOR_OPEN, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
   pwm_start(LEFT_DOOR, 50, LEFT_DOOR_OPEN, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
 
   //delay(200);
-  //digitalWrite(BOX_MOTOR, HIGH);
+  digitalWrite(BOX_MOTOR, HIGH);
 
  
   //Set Servo to neutral position
@@ -202,14 +214,31 @@ void loop() {
     if(doorsClosed && (!mago || !mago2)){
       magnet_out_interrupt();
     }
-    //Only like this if no exit sensors after long time
+    
     if (shouldStart){
       shouldStart = false;
       digitalWrite(BOX_MOTOR, HIGH);
     }
 
+    if (shouldStop && (getCurrentMillis()-stopTime) > 500){
+      magnet_interrupt();
+    }
+
+    int boxSensor = digitalRead(BOX_COUNTER);
+
+    if(!boxSensor && lastBoxState && !doorsClosed){
+      boxCount++;
+      if(boxCount >= MAX_BOXES){
+        shouldStop = true;
+        stopTime = getCurrentMillis();
+      }
+    }
+    lastBoxState = boxSensor;
+
+
+
     //Increase speedMultiplier towards 1 (in case it was decreased by collision)
-    if (getCurrentMillis()-collisionTime > 500 && speedMultiplier < 1){
+    if ((getCurrentMillis()-collisionTime) > 2000 && speedMultiplier < 1){
       speedMultiplier += 0.02;
     }
 
@@ -235,13 +264,16 @@ void follow_tape(){
     int l = analogRead(LEFT_EYE);
     int lo = analogRead(LEFT_EYE_OUT);
 
+    int re = analogRead(RIGHT_SIDE_EYE);
+    int le = analogRead(LEFT_SIDE_EYE);
+
     bool rightOn = analogRead(RIGHT_EYE) > THRESHOLD;
     bool rightOutOn = analogRead(RIGHT_EYE_OUT) > THRESHOLD;
     bool leftOn = analogRead(LEFT_EYE) > THRESHOLD;
     bool leftOutOn = analogRead(LEFT_EYE_OUT) > THRESHOLD;
 
-    bool leftSideOn = analogRead(LEFT_SIDE_EYE) > THRESHOLD && analogRead(LEFT_SIDE_EYE) < 1000;
-    bool rightSideOn = analogRead(RIGHT_SIDE_EYE) > THRESHOLD && analogRead(RIGHT_SIDE_EYE) < 1000;
+    bool leftSideOn = analogRead(LEFT_SIDE_EYE) > 650;// && analogRead(LEFT_SIDE_EYE) < 1000;
+    bool rightSideOn = analogRead(RIGHT_SIDE_EYE) > 650;// && analogRead(RIGHT_SIDE_EYE) < 1000;
 
     int leftOver;
     int lastState = steeringState;
@@ -266,12 +298,20 @@ void follow_tape(){
     } else if (!leftOutOn && !leftOn && rightOn && !rightOutOn){//} && lastState < STATE_3){
       steeringState = -STATE_1;
     } 
-    if (!leftOutOn && !leftOn && !rightOn && !rightOutOn){ //If all goes to shit, try to fix it
+    if (!leftOutOn && !leftOn && !rightOn && !rightOutOn){ //If all goes to shit, try to fix it with edge sensors
       offTapeCount++;
-      if (leftSideOn && offTapeCount > 10){
+      if (leftSideOn && offTapeCount > 5){ //10 loops is 0.2 seconds, may need to be changed
         steeringState = STATE_4;
-      } else if (rightSideOn && offTapeCount > 10){
+        if (steeringState != lastState){
+          speedMultiplier = 0;
+          collisionTime = getCurrentMillis();
+        }
+      } else if (rightSideOn && offTapeCount > 5){
         steeringState = -STATE_4;
+        if (steeringState != lastState){
+          speedMultiplier = 0;
+          collisionTime = getCurrentMillis();
+        }
       }
     } else {
       offTapeCount = 0;
@@ -296,10 +336,15 @@ void follow_tape(){
       display_handler.setCursor(0,0);
       char msg[100];
       char msg2[100];
+      char msg3[100];
+      // sprintf(msg, "Box Count: %d", boxCount);
+      // display_handler.println(msg);
       sprintf(msg, "Steering State: %d", steeringState);
       sprintf(msg2, "%d %d %d %d", lo, l, r, ro);
+      sprintf(msg3, "%d %d", le, re);
       display_handler.println(msg);
       display_handler.println(msg2);
+      display_handler.println(msg3);
       display_handler.display();
       
     }
@@ -349,7 +394,7 @@ void follow_tape(){
       currentPIDNum = PID_MIN;
     }
 
-    //Calculate amount of differential steering to add on top of steering, and set steering
+    //Calculate amount of differential steering to add on top of steering, and keep servo within max
     if (currentPIDNum > STEERING_MAX_INPUT) {
       leftOver = currentPIDNum - STEERING_MAX_INPUT;
       currentServoPos = STEERING_MAX_INPUT;
@@ -364,9 +409,9 @@ void follow_tape(){
     //Set new servo position
     pwm_start(STEERING_SERVO, 50, currentServoPos, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
 
-    // if(abs(steeringState) < STATE_4){
-    //   leftOver = 0;
-    // }
+    if(abs(steeringState) < STATE_4){
+      leftOver = 0;
+    }
 
     //keep differential within maximum (shouldn't happen but safety) 
     if (kdif*leftOver-MOTOR_SPEED > 4095) {
@@ -386,7 +431,7 @@ void follow_tape(){
           pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, (int)((MOTOR_SPEED-leftOver*kdif)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
         }
         pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-        pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, (int)(MOTOR_SPEED+leftOver*kdif*kWheelSpeedUp*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+        pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, (int)((MOTOR_SPEED+leftOver*kdif*kWheelSpeedUp)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
       } else if (leftOver < 0){
         if(-leftOver*kdif > MOTOR_SPEED){
           pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
@@ -396,7 +441,7 @@ void follow_tape(){
           pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, (int)((MOTOR_SPEED+leftOver*kdif)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
         }
         pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-        pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, (int)(MOTOR_SPEED-leftOver*kdif*kWheelSpeedUp*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+        pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, (int)((MOTOR_SPEED-leftOver*kdif*kWheelSpeedUp)*speedMultiplier), TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
       } else {
         pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
         pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
@@ -417,9 +462,16 @@ void collision(){
 int get_state(){
   //This function will use data from the collision sensors to figure out if something other than tape following needs to happen
   //Most of the time will return TAPE_FOLLOW_STATE
-  if (digitalRead(LEFT_COLLISION) || digitalRead(RIGHT_COLLISION) || digitalRead(MIDDLE_COLLISION)){
-    return COLLISION_STATE;
+  if (digitalRead(LEFT_COLLISION) || digitalRead(RIGHT_COLLISION) || digitalRead(MIDDLE_LEFT_COLLISION || digitalRead(MIDDLE_RIGHT_COLLISION))){
+    if (!lastCollisionState){
+      lastCollisionState = 1;
+      return COLLISION_STATE;
+    } else {
+      lastCollisionState = 1;
+      return TAPE_FOLLOW_STATE;
+    }
   } else {
+    lastCollisionState = 0;
     return TAPE_FOLLOW_STATE;
   }
 }
@@ -445,11 +497,13 @@ void magnet_interrupt(){
 }
 
 void magnet_out_interrupt(){
-  //doors open
-  pwm_start(RIGHT_DOOR, 50, RIGHT_DOOR_OPEN, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
-  pwm_start(LEFT_DOOR, 50, LEFT_DOOR_OPEN, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
-  shouldStart = true;
-  doorsClosed = false;
+  if (boxCount <= MAX_BOXES) {
+    //doors open
+    pwm_start(RIGHT_DOOR, 50, RIGHT_DOOR_OPEN, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+    pwm_start(LEFT_DOOR, 50, LEFT_DOOR_OPEN, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+    shouldStart = true;
+    doorsClosed = false;
+  }
 }
 
 void rightTurn(){
@@ -487,15 +541,15 @@ void leftTurn(){
   pwm_start(STEERING_SERVO, 50, STEERING_MAX_INPUT, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
   pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 2000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
   pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 500, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-  delay(650);
+  delay(666);
   pwm_start(STEERING_SERVO, 50, STEERING_NEUTRAL, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
   pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 2000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
   pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 2000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
   delay(450);
-  pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-  pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);  
+  // pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  // pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);  
 
-  delay(10000000);
+  // delay(10000000);
 }
 
 
