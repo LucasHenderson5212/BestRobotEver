@@ -1,10 +1,12 @@
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
 #include <math.h>
-
+//https://www.amazon.ca/dp/B07SSNJ6Y5/ref=sspa_dk_detail_0?pd_rd_i=B07SWW9NDR&pd_rd_w=7Bw2g&content-id=amzn1.sym.43f51e91-471e-46fd-9eb7-f35b3f7790d8&pf_rd_p=43f51e91-471e-46fd-9eb7-f35b3f7790d8&pf_rd_r=G9XBGQHSD56J52QQ9RB2&pd_rd_wg=ftXRi&pd_rd_r=f276fa57-2491-46d2-b009-a5b08aa60fa2&s=toys&sp_csd=d2lkZ2V0TmFtZT1zcF9kZXRhaWwy&th=1
 #define displayOn false
-#define HARD_CODE_RIGHT false
+#define HARD_CODE_RIGHT true
 #define HARD_CODE_LEFT false
+
+#define HARD_CODE_PIN PB11
 
 #define TAPE_FOLLOW_STATE 1
 #define COLLISION_STATE 2
@@ -37,7 +39,7 @@
 #define MAG_OUT_SENSOR_2 PA11
 
 #define BOX_COUNTER PB1
-#define MAX_BOXES 3
+#define MAX_BOXES 5
 
 #define LEFT_DOOR PA_8
 #define RIGHT_DOOR PA_10
@@ -62,7 +64,7 @@
 #define PID_MAX STEERING_MAX_INPUT+MAX_LEFTOVER
 
 #define MOTOR_FREQUENCY 100
-#define MOTOR_SPEED 1300
+#define MOTOR_SPEED 1200
 
 #define THRESHOLD 350
 
@@ -72,8 +74,8 @@
 #define STATE_4 7
 
 //PID constants
-#define kp 105
-#define kd 160
+#define kp 103
+#define kd 163
 #define kdout 20
 #define ki 1
 #define kdif 6
@@ -118,7 +120,7 @@ void leftTurn();
 
 void follow_tape();
 void collision();
-int get_state(void);
+void get_state(void);
 
 Adafruit_SSD1306 display_handler(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
@@ -187,7 +189,7 @@ void setup() {
 
   delay(100);
 
-  if (!displayOn && HARD_CODE_RIGHT){
+  if (!displayOn && HARD_CODE_RIGHT/*digitalRead(HARD_CODE_PIN)*/){
     rightTurn();
   } else if (!displayOn && HARD_CODE_LEFT){
     leftTurn();
@@ -220,7 +222,7 @@ void loop() {
       digitalWrite(BOX_MOTOR, HIGH);
     }
 
-    if (shouldStop && (getCurrentMillis()-stopTime) > 500){
+    if (shouldStop && (getCurrentMillis()-stopTime) > 700){
       magnet_interrupt();
     }
 
@@ -238,22 +240,14 @@ void loop() {
 
 
     //Increase speedMultiplier towards 1 (in case it was decreased by collision)
-    if ((getCurrentMillis()-collisionTime) > 2000 && speedMultiplier < 1){
+    if ((getCurrentMillis()-collisionTime) > 1000 && speedMultiplier < 1){
       speedMultiplier += 0.02;
+    } else if (speedMultiplier > 1){
+      speedMultiplier -= 0.02;
     }
 
-    //find what to do
-    switch (get_state())
-    {
-    case TAPE_FOLLOW_STATE:
-      follow_tape();
-      break;
-    case COLLISION_STATE:
-      collision();
-      break;
-    default:
-      break;
-    }
+    //find what to do re: collisions
+    get_state();
   }
 }
 
@@ -275,8 +269,10 @@ void follow_tape(){
     bool leftSideOn = analogRead(LEFT_SIDE_EYE) > 650;// && analogRead(LEFT_SIDE_EYE) < 1000;
     bool rightSideOn = analogRead(RIGHT_SIDE_EYE) > 650;// && analogRead(RIGHT_SIDE_EYE) < 1000;
 
+    int lastStateChange = 0;
     int leftOver;
     int lastState = steeringState;
+
 
     // FOR 4 REFLECTENCE SENSORS, find the position state
     if (!rightOn && !leftOn && !rightOutOn && !leftOutOn && lastState > 0) {
@@ -303,18 +299,26 @@ void follow_tape(){
       if (leftSideOn && offTapeCount > 5){ //10 loops is 0.2 seconds, may need to be changed
         steeringState = STATE_4;
         if (steeringState != lastState){
-          speedMultiplier = 0;
+          //speedMultiplier = 0;
           collisionTime = getCurrentMillis();
         }
       } else if (rightSideOn && offTapeCount > 5){
         steeringState = -STATE_4;
         if (steeringState != lastState){
-          speedMultiplier = 0;
+          //speedMultiplier = 0;
           collisionTime = getCurrentMillis();
         }
       }
     } else {
       offTapeCount = 0;
+    }
+
+    
+    if (steeringState != lastState){
+      lastStateChange = getCurrentMillis();
+    }
+    if((getCurrentMillis() - lastStateChange) > 5000){
+      steeringState = -steeringState;
     }
 
     // Once robot is back on tape, set motors, i back to normal immediately (to prevent overshooting?)
@@ -451,28 +455,25 @@ void follow_tape(){
     }
 }
 
-void collision(){
-  //This will be what happens during first collision, etc. 
-  //After many collisions or something else, other methods must be implemented.
-  //speedMultiplier = 0;
-  //collisionTime = getCurrentMillis();
-  follow_tape();
-}
-
-int get_state(){
+void get_state(){
   //This function will use data from the collision sensors to figure out if something other than tape following needs to happen
   //Most of the time will return TAPE_FOLLOW_STATE
-  if (digitalRead(LEFT_COLLISION) || digitalRead(RIGHT_COLLISION) || digitalRead(MIDDLE_LEFT_COLLISION || digitalRead(MIDDLE_RIGHT_COLLISION))){
+  if (digitalRead(MIDDLE_LEFT_COLLISION || digitalRead(MIDDLE_RIGHT_COLLISION))){
     if (!lastCollisionState){
       lastCollisionState = 1;
-      return COLLISION_STATE;
+      //speedMultiplier = 0;
+      digitalWrite(BOX_MOTOR, LOW);
+      delay(1000);
+      digitalWrite(BOX_MOTOR, HIGH);
+      collisionTime = getCurrentMillis();
     } else {
       lastCollisionState = 1;
-      return TAPE_FOLLOW_STATE;
     }
+  } else if (digitalRead(LEFT_COLLISION) || digitalRead(RIGHT_COLLISION)) {
+    speedMultiplier = 2;
+    lastCollisionState = 0;
   } else {
     lastCollisionState = 0;
-    return TAPE_FOLLOW_STATE;
   }
 }
 
@@ -484,16 +485,6 @@ void magnet_interrupt(){
   pwm_start(RIGHT_DOOR, 50, RIGHT_DOOR_CLOSE, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
   pwm_start(LEFT_DOOR, 50, LEFT_DOOR_CLOSE, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
   doorsClosed = true;
-
-  // if(displayOn){
-  //   display_handler.clearDisplay();
-  //   display_handler.setTextSize(1);
-  //   display_handler.setTextColor(SSD1306_WHITE);
-  //   display_handler.setCursor(0,0);
-  //   display_handler.println("Interrupt happened");
-  //   display_handler.display();
-  // }
-
 }
 
 void magnet_out_interrupt(){
