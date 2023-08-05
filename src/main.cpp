@@ -70,7 +70,7 @@
 #define PID_MAX STEERING_MAX_INPUT+MAX_LEFTOVER
 
 #define MOTOR_FREQUENCY 100
-#define MOTOR_SPEED 2500
+#define MOTOR_SPEED 3300
 
 #define THRESHOLD 350
 
@@ -81,17 +81,17 @@
 
 //PID constants
 #define kp 30
-#define kd 8
-#define kdout 8
-#define ki 1
-#define kdif 20
+#define kd 15
+#define kdout 10
+#define ki 0.5
+#define kdif 35
 
-#define kWheelSpeedUp (4000-MOTOR_SPEED)/(MAX_LEFTOVER*kdif)*0
+#define kWheelSpeedUp 0//(4000-MOTOR_SPEED)/(MAX_LEFTOVER*kdif)*0
 //leftOver*kdif*0.x < 4000 - MOTOR_SPEED
 
-#define dDuration 12
+#define dDuration 10
 
-#define maxi 30
+#define maxi 50
 
 int steeringState = 0;
 int i = 0;
@@ -182,8 +182,8 @@ void setup() {
   pwm_start(RIGHT_DOOR, 50, RIGHT_DOOR_OPEN, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
   pwm_start(LEFT_DOOR, 50, LEFT_DOOR_OPEN, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
 
-  delay(200);
-  digitalWrite(BOX_MOTOR, HIGH);
+  // delay(100);
+  // digitalWrite(BOX_MOTOR, HIGH);
 
  
   //Set Servo to neutral position
@@ -273,7 +273,7 @@ void loop() {
     lastBoxState = boxSensor;
 
     //Increase speedMultiplier towards 1 (in case it was decreased by collision)
-    if ((getCurrentMillis()-collisionTime) > 1000 && speedMultiplier < 1){
+    if ((getCurrentMillis()-collisionTime) > 5000 && speedMultiplier < 1){
       speedMultiplier += 0.02;
     } else if (speedMultiplier > 1){
       speedMultiplier -= 0.02;
@@ -333,13 +333,13 @@ void follow_tape(){
         steeringState = STATE_4;
         if (steeringState != lastState){
           speedMultiplier = 0;
-          collisionTime = getCurrentMillis();
+          collisionTime = getCurrentMillis()+3000;
         }
       } else if (rightSideOn && offTapeCount > 5){
         steeringState = -STATE_4;
         if (steeringState != lastState){
           speedMultiplier = 0;
-          collisionTime = getCurrentMillis();
+          collisionTime = getCurrentMillis()+3000;
         }
       }
     } else {
@@ -351,7 +351,7 @@ void follow_tape(){
       digitalWrite(GREEN_LIGHT, LOW);
       lastStateChange = getCurrentMillis();
     }
-    if((getCurrentMillis() - lastStateChange) > 5000 && abs(steeringState) == STATE_4){
+    if((getCurrentMillis() - lastStateChange) > 10000 && abs(steeringState) == STATE_4){
       lastStateChange = getCurrentMillis();
       steeringState = -steeringState;
     }
@@ -501,7 +501,7 @@ void follow_tape(){
 void get_state(){
   // //This function will use data from the collision sensors to figure out if something other than tape following needs to happen
   // //Most of the time will return TAPE_FOLLOW_STATE
-  if (digitalRead(!MIDDLE_SIDES_COLLISION) || digitalRead(MIDDLE_SIDES_COLLISION)){
+  if (digitalRead(MIDDLE_COLLISION) || !digitalRead(MIDDLE_SIDES_COLLISION)){
     if (!lastCollisionState){
       lastCollisionState = 1;
       speedMultiplier = 0;
@@ -576,7 +576,7 @@ void rightTurn(){
   pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
   pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);  
 
-  //delay(10000000);
+  delay(10000000);
 }
 
 void leftTurn(){
@@ -585,21 +585,24 @@ void leftTurn(){
   pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 1000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
   pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 1000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
   delay(50);
-  pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 2200, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-  pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 2200, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-  delay(300);
+  pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 3000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 3000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  delay(350);
   pwm_start(STEERING_SERVO, 50, STEERING_MAX_INPUT, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
   pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 2000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
   pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 500, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-  delay(666);
+  delay(400);
+  pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT); 
+  delay(1000000);
   pwm_start(STEERING_SERVO, 50, STEERING_NEUTRAL, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
   pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 2000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
   pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 2000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
   delay(450);
-  // pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-  // pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);  
+  pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+  pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);  
 
-  // delay(10000000);
+   delay(10000000);
 }
 
 
