@@ -62,7 +62,7 @@
 
 #define STEERING_NEUTRAL 1470
 #define STEERING_MIN_INPUT 1220
-#define STEERING_MAX_INPUT 1740
+#define STEERING_MAX_INPUT 1780
 
 #define MAX_LEFTOVER (4095+MOTOR_SPEED)/kdif
 
@@ -77,14 +77,14 @@
 #define STATE_1 1
 #define STATE_2 2
 #define STATE_3 6
-#define STATE_4 12
+#define STATE_4 15
 
 //PID constants
-#define kp 33
-#define kd 15
-#define kdout 15
+#define kp 27
+#define kd 6
+#define kdout kd
 #define ki 0.5
-#define kdif 35
+#define kdif 36
 
 #define kWheelSpeedUp 0//(4000-MOTOR_SPEED)/(MAX_LEFTOVER*kdif)*0
 //leftOver*kdif*0.x < 4000 - MOTOR_SPEED
@@ -183,7 +183,7 @@ void setup() {
   pwm_start(LEFT_DOOR, 50, LEFT_DOOR_OPEN, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
 
   // delay(100);
-  // digitalWrite(BOX_MOTOR, HIGH);
+  digitalWrite(BOX_MOTOR, HIGH);
 
  
   //Set Servo to neutral position
