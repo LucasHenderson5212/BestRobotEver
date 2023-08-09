@@ -60,7 +60,7 @@
 #define MIDDLE_SIDES_COLLISION PB14
 #define RIGHT_COLLISION PB13
 
-#define STEERING_NEUTRAL 1460
+#define STEERING_NEUTRAL 1430
 #define STEERING_MIN_INPUT 1240
 #define STEERING_MAX_INPUT 1720
 
@@ -72,7 +72,7 @@
 #define MOTOR_FREQUENCY 100
 #define MOTOR_SPEED 3500
 #define MOTOR_SPEED_START 1800
-#define START_SPEED_TIME 100000
+#define START_SPEED_TIME 16000
 
 #define THRESHOLD 525
 
@@ -226,7 +226,7 @@ void setup() {
   if (!displayOn && HARD_CODE_RIGHT/*digitalRead(HARD_CODE_PIN)*/){
     rightStartLoop();
   } else if (!displayOn && HARD_CODE_LEFT){
-    leftTurn();
+    leftStartLoop();
   }
   lastTime = getCurrentMillis();
 }
@@ -689,27 +689,29 @@ bool inLoop = true;
     }
     lastBoxState = boxSensor;
 
-    if (getCurrentMillis() > (75 + 970 + 400)){
+    if (getCurrentMillis() > (75 + 790 + 480)){
       inLoop = false;
-    } else if (getCurrentMillis() > (75 + 970)){
-      pwm_start(STEERING_SERVO, 50, STEERING_NEUTRAL-30, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
-      pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 4095, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+    } else if (getCurrentMillis() > (75 + 790 + 440)){
+      pwm_start(STEERING_SERVO, 50, STEERING_NEUTRAL-40, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+;     pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 4095, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+      pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 4095, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+      delay(20);
+    }else if (getCurrentMillis() > (75 + 790)){
+      pwm_start(STEERING_SERVO, 50, STEERING_NEUTRAL, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+;     pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 4095, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
       pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 4095, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
       delay(20);
     } else if (getCurrentMillis() > (75)){
-      pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 1850, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
+      pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 2250, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
       pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 4095, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
       delay(20);
     } else {
-      pwm_start(STEERING_SERVO, 50, STEERING_MIN_INPUT, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
+      pwm_start(STEERING_SERVO, 50, STEERING_MAX_INPUT, TimerCompareFormat_t::MICROSEC_COMPARE_FORMAT);
       pwm_start(LEFT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
       pwm_start(RIGHT_MOTOR_2, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
       pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 1000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
       pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 1000, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
       delay(20);
     }
-    // pwm_start(LEFT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT);
-    // pwm_start(RIGHT_MOTOR, MOTOR_FREQUENCY, 0, TimerCompareFormat_t::RESOLUTION_12B_COMPARE_FORMAT); 
-    // delay(1000000);
   }
 }
