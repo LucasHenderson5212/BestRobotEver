@@ -5,7 +5,7 @@
 
 #define GREEN_LIGHT PC13
 #define displayOn false
-#define HARD_CODE_RIGHT true
+#define HARD_CODE_RIGHT false
 #define HARD_CODE_LEFT false
 
 #define HARD_CODE_PIN PB11
@@ -16,6 +16,8 @@
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 #define OLED_RESET  -1 // This display does not have a reset pin accessible
+//chicken
+// gabe was here
 
 #define RIGHT_EYE_OUT PA5
 #define RIGHT_EYE PA6
@@ -52,6 +54,7 @@
 
 #define LEFT_DOOR_CLOSE 1575
 #define LEFT_DOOR_OPEN 1000
+
 #define RIGHT_DOOR_CLOSE 1150
 #define RIGHT_DOOR_OPEN 1725
 
@@ -72,9 +75,9 @@
 #define MOTOR_FREQUENCY 100
 #define MOTOR_SPEED 3500
 #define MOTOR_SPEED_START 1800
-#define START_SPEED_TIME 16000
+#define START_SPEED_TIME 0//15000
 
-#define THRESHOLD 525
+#define THRESHOLD 450
 
 #define STATE_1 1
 #define STATE_2 2
@@ -82,11 +85,11 @@
 #define STATE_4 15
 
 //PID constants
-#define kp 30
-#define kd 8
+#define kp 25
+#define kd 9
 #define kdout kd
-#define ki 0.5
-#define kdif 36
+#define ki 0.8
+#define kdif 42
 
 //Slow PID constants
 #define kp_s 26
@@ -326,7 +329,7 @@ void follow_tape(){
       steeringState = -STATE_4;
     } else if (leftOutOn && !leftOn && !rightOn && !rightOutOn){//} && lastState > -STATE_3) {
       steeringState = STATE_3;
-    } else if (leftOutOn && leftOn && !rightOn && !rightOutOn){//} && lastState > -STATE_3) {
+    } else if (leftOutOn && leftOn && !rightOutOn){//} && lastState > -STATE_3) {
       steeringState = STATE_2;
     } else if (!leftOutOn && leftOn && !rightOn && !rightOutOn){//} && lastState > -STATE_3){
       steeringState = STATE_1;
@@ -334,12 +337,11 @@ void follow_tape(){
       steeringState = 0;
     } else if (!leftOutOn && !leftOn && !rightOn && rightOutOn){//} && lastState < STATE_3){
       steeringState = -STATE_3;
-    } else if (!leftOutOn && !leftOn && rightOn && rightOutOn){//} && lastState < STATE_3){
+    } else if (!leftOutOn && rightOn && rightOutOn){//} && lastState < STATE_3){
       steeringState = -STATE_2;
     } else if (!leftOutOn && !leftOn && rightOn && !rightOutOn){//} && lastState < STATE_3){
       steeringState = -STATE_1;
-    } 
-    if (!leftOutOn && !leftOn && !rightOn && !rightOutOn){ //If all goes to shit, try to fix it with edge sensors
+    } else if (!leftOutOn && !leftOn && !rightOn && !rightOutOn){ //If all goes to shit, try to fix it with edge sensors
       offTapeCount++;
       if (leftSideOn && offTapeCount > 4 && lastStateChange != 0 && !caughtTape && lastState != STATE_4){ //10 loops is 0.2 seconds, may need to be changed
         steeringState = STATE_4;
@@ -393,8 +395,8 @@ void follow_tape(){
       char msg3[100];
       char stateTime[100];
       char currTime[100];
-      sprintf(msg, "Box Count: %d", boxCount);
-      display_handler.println(msg);
+      // sprintf(msg, "Box Count: %d", boxCount);
+      // display_handler.println(msg);
       sprintf(msg, "Steering State: %d", steeringState);
       sprintf(msg2, "%d %d %d %d", lo, l, r, ro);
       sprintf(msg3, "%d %d", le, re);
@@ -402,9 +404,9 @@ void follow_tape(){
       sprintf(stateTime, "Last State Change Time: %d", lastStateChange);
       sprintf(currTime, "CurrentTime: %d", getCurrentMillis());
       
-      // display_handler.println(msg);
-      // display_handler.println(msg2);
-      // display_handler.println(msg3);
+      display_handler.println(msg);
+      display_handler.println(msg2);
+      display_handler.println(msg3);
       // display_handler.println(stateTime);
       // display_handler.println(currTime);
       display_handler.display();
